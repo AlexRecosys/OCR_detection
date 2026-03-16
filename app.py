@@ -3,9 +3,8 @@ import time
 import numpy as np
 import gradio as gr
 
-from visualizer import build_html
-
-os.environ["FLAGS_fraction_of_gpu_memory_to_use"] = "0.0"
+os.environ["FLAGS_use_mkldnn"] = "1"
+os.environ["FLAGS_mkldnn_cache_capacity"] = "10"
 os.environ["FLAGS_allocator_strategy"] = "auto_growth"
 os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 
@@ -13,19 +12,43 @@ local_tmp_dir = os.path.join(os.getcwd(), "gradio_tmp")
 os.makedirs(local_tmp_dir, exist_ok=True)
 os.environ["GRADIO_TEMP_DIR"] = local_tmp_dir
 
+import paddle
 from paddleocr import PaddleOCR
+from visualizer import build_html
+
+paddle.set_device("cpu")
+try:
+    paddle.fluid.core.set_num_threads(os.cpu_count())
+except AttributeError:
+    os.environ["OMP_NUM_THREADS"] = str(os.cpu_count())
+
+MODES = {
+    "Multilingual (DE/EN/FR/CH/...)": {
+        "lang": "german",
+        "rec_mobile": "PP-OCRv5_mobile_rec",
+        "rec_server": "PP-OCRv5_server_rec",
+    },
+    "Arabic": {
+        "lang": "ar",
+        "rec_mobile": "arabic_PP-OCRv5_mobile_rec",
+        "rec_server": "arabic_PP-OCRv5_mobile_rec",
+    },
+}
 
 _model_cache = {}
 
-def get_model(language="german", mobile=False):
-    key = f"{language}_{'mobile' if mobile else 'server'}"
+def get_model(mode="Multilingual (DE/EN/FR/CH/...)", mobile=False):
+    key = f"{mode}_{'mobile' if mobile else 'server'}"
     if key not in _model_cache:
+        cfg = MODES[mode]
+        rec_model = cfg["rec_mobile"] if mobile else cfg["rec_server"]
         kwargs = dict(
-            lang=language,
-            device="gpu",
+            lang=cfg["lang"],
+            device="cpu",
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
-            use_textline_orientation=True,
+            use_textline_orientation=False,
+            text_recognition_model_name=rec_model,
         )
         if mobile:
             kwargs["text_detection_model_name"] = "PP-OCRv5_mobile_det"
@@ -68,8 +91,12 @@ with gr.Blocks(title="PaddleOCR") as ui:
     with gr.Row():
         with gr.Column(scale=1):
             input_img = gr.Image(label="Input", type="numpy")
-            lang = gr.Dropdown(["german", "en", "fr", "ar", "ch"], value="german", label="Language")
-            mobile = gr.Checkbox(label="Mobile model (faster, less accurate)")
+            lang = gr.Dropdown(
+                choices=list(MODES.keys()),
+                value="Multilingual (DE/EN/FR/CH/...)",
+                label="Language",
+            )
+            mobile = gr.Checkbox(label="Mobile model (faster, less accurate)", value=True)
             theme = gr.Radio(["dark", "light"], value="dark", label="Theme")
             run_btn = gr.Button("Analyze", variant="primary")
         with gr.Column(scale=2):
