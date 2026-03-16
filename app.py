@@ -68,7 +68,7 @@ with gr.Blocks(title="PaddleOCR") as ui:
     with gr.Row():
         with gr.Column(scale=1):
             input_img = gr.Image(label="Input", type="numpy")
-            lang = gr.Dropdown(["german", "en", "fr", "ar"], value="german", label="Language")
+            lang = gr.Dropdown(["german", "en", "fr", "ar", "ch"], value="german", label="Language")
             mobile = gr.Checkbox(label="Mobile model (faster, less accurate)")
             theme = gr.Radio(["dark", "light"], value="dark", label="Theme")
             run_btn = gr.Button("Analyze", variant="primary")
